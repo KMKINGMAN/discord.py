@@ -1,4 +1,4 @@
-discord.py
+discord.py - I hope you come back :( 
 ==========
 
 .. image:: https://discord.com/api/guilds/336642139381301249/embed.png
