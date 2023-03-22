@@ -25,10 +25,17 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 from typing import TypedDict, List, Optional
+from typing_extensions import NotRequired
 
 from .user import User
 from .team import Team
 from .snowflake import Snowflake
+
+
+class InstallParams(TypedDict):
+    scopes: List[str]
+    permissions: str
+
 
 class BaseAppInfo(TypedDict):
     id: Snowflake
@@ -38,23 +45,27 @@ class BaseAppInfo(TypedDict):
     summary: str
     description: str
 
-class _AppInfoOptional(TypedDict, total=False):
-    team: Team
-    guild_id: Snowflake
-    primary_sku_id: Snowflake
-    slug: str
-    terms_of_service_url: str
-    privacy_policy_url: str
-    hook: bool
-    max_participants: int
 
-class AppInfo(BaseAppInfo, _AppInfoOptional):
+class AppInfo(BaseAppInfo):
     rpc_origins: List[str]
     owner: User
     bot_public: bool
     bot_require_code_grant: bool
+    team: NotRequired[Team]
+    guild_id: NotRequired[Snowflake]
+    primary_sku_id: NotRequired[Snowflake]
+    slug: NotRequired[str]
+    terms_of_service_url: NotRequired[str]
+    privacy_policy_url: NotRequired[str]
+    hook: NotRequired[bool]
+    max_participants: NotRequired[int]
+    tags: NotRequired[List[str]]
+    install_params: NotRequired[InstallParams]
+    custom_install_url: NotRequired[str]
+    role_connections_verification_url: NotRequired[str]
 
-class _PartialAppInfoOptional(TypedDict, total=False):
+
+class PartialAppInfo(BaseAppInfo, total=False):
     rpc_origins: List[str]
     cover_image: str
     hook: bool
@@ -63,5 +74,7 @@ class _PartialAppInfoOptional(TypedDict, total=False):
     max_participants: int
     flags: int
 
-class PartialAppInfo(_PartialAppInfoOptional, BaseAppInfo):
-    pass
+
+class GatewayAppInfo(TypedDict):
+    id: Snowflake
+    flags: int

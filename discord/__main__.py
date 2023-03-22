@@ -22,34 +22,43 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+from __future__ import annotations
+
+from typing import Optional, Tuple, Dict
+
 import argparse
 import sys
 from pathlib import Path
 
 import discord
-import pkg_resources
+import importlib.metadata
 import aiohttp
 import platform
 
-def show_version():
+
+def show_version() -> None:
     entries = []
 
     entries.append('- Python v{0.major}.{0.minor}.{0.micro}-{0.releaselevel}'.format(sys.version_info))
     version_info = discord.version_info
     entries.append('- discord.py v{0.major}.{0.minor}.{0.micro}-{0.releaselevel}'.format(version_info))
     if version_info.releaselevel != 'final':
-        pkg = pkg_resources.get_distribution('discord.py')
-        if pkg:
-            entries.append(f'    - discord.py pkg_resources: v{pkg.version}')
+        version = importlib.metadata.version('discord.py')
+        if version:
+            entries.append(f'    - discord.py metadata: v{version}')
 
     entries.append(f'- aiohttp v{aiohttp.__version__}')
     uname = platform.uname()
     entries.append('- system info: {0.system} {0.release} {0.version}'.format(uname))
     print('\n'.join(entries))
 
-def core(parser, args):
+
+def core(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if args.version:
         show_version()
+    else:
+        parser.print_help()
+
 
 _bot_template = """#!/usr/bin/env python3
 
@@ -58,11 +67,13 @@ import discord
 import config
 
 class Bot(commands.{base}):
-    def __init__(self, **kwargs):
-        super().__init__(command_prefix=commands.when_mentioned_or('{prefix}'), **kwargs)
+    def __init__(self, intents: discord.Intents, **kwargs):
+        super().__init__(command_prefix=commands.when_mentioned_or('{prefix}'), intents=intents, **kwargs)
+
+    async def setup_hook(self):
         for cog in config.cogs:
             try:
-                self.load_extension(cog)
+                await self.load_extension(cog)
             except Exception as exc:
                 print(f'Could not load extension {{cog}} due to {{exc.__class__.__name__}}: {{exc}}')
 
@@ -70,7 +81,9 @@ class Bot(commands.{base}):
         print(f'Logged on as {{self.user}} (ID: {{self.user.id}})')
 
 
-bot = Bot()
+intents = discord.Intents.default()
+intents.message_content = True
+bot = Bot(intents=intents)
 
 # write general commands here
 
@@ -116,12 +129,16 @@ class {name}(commands.Cog{attrs}):
     def __init__(self, bot):
         self.bot = bot
 {extra}
-def setup(bot):
-    bot.add_cog({name}(bot))
+async def setup(bot):
+    await bot.add_cog({name}(bot))
 '''
 
 _cog_extras = '''
-    def cog_unload(self):
+    async def cog_load(self):
+        # loading logic goes here
+        pass
+
+    async def cog_unload(self):
         # clean up logic goes here
         pass
 
@@ -140,6 +157,10 @@ _cog_extras = '''
     async def cog_command_error(self, ctx, error):
         # error handling to every command in here
         pass
+        
+    async def cog_app_command_error(self, interaction, error):
+        # error handling to every application command in here
+        pass
 
     async def cog_before_invoke(self, ctx):
         # called before a command is called here
@@ -155,7 +176,7 @@ _cog_extras = '''
 # certain file names and directory names are forbidden
 # see: https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247%28v=vs.85%29.aspx
 # although some of this doesn't apply to Linux, we might as well be consistent
-_base_table = {
+_base_table: Dict[str, Optional[str]] = {
     '<': '-',
     '>': '-',
     ':': '-',
@@ -172,13 +193,36 @@ _base_table.update((chr(i), None) for i in range(32))
 
 _translation_table = str.maketrans(_base_table)
 
-def to_path(parser, name, *, replace_spaces=False):
+
+def to_path(parser: argparse.ArgumentParser, name: str, *, replace_spaces: bool = False) -> Path:
     if isinstance(name, Path):
         return name
 
     if sys.platform == 'win32':
-        forbidden = ('CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', \
-                     'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9')
+        forbidden = (
+            'CON',
+            'PRN',
+            'AUX',
+            'NUL',
+            'COM1',
+            'COM2',
+            'COM3',
+            'COM4',
+            'COM5',
+            'COM6',
+            'COM7',
+            'COM8',
+            'COM9',
+            'LPT1',
+            'LPT2',
+            'LPT3',
+            'LPT4',
+            'LPT5',
+            'LPT6',
+            'LPT7',
+            'LPT8',
+            'LPT9',
+        )
         if len(name) <= 4 and name.upper() in forbidden:
             parser.error('invalid directory name given, use a different one')
 
@@ -187,7 +231,8 @@ def to_path(parser, name, *, replace_spaces=False):
         name = name.replace(' ', '-')
     return Path(name)
 
-def newbot(parser, args):
+
+def newbot(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     new_directory = to_path(parser, args.directory) / to_path(parser, args.name)
 
     # as a note exist_ok for Path is a 3.5+ only feature
@@ -228,7 +273,8 @@ def newbot(parser, args):
 
     print('successfully made bot at', new_directory)
 
-def newcog(parser, args):
+
+def newcog(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     cog_dir = to_path(parser, args.directory)
     try:
         cog_dir.mkdir(exist_ok=True)
@@ -261,7 +307,8 @@ def newcog(parser, args):
     else:
         print('successfully made cog at', directory)
 
-def add_newbot_args(subparser):
+
+def add_newbot_args(subparser: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparser.add_parser('newbot', help='creates a command bot project quickly')
     parser.set_defaults(func=newbot)
 
@@ -271,7 +318,8 @@ def add_newbot_args(subparser):
     parser.add_argument('--sharded', help='whether to use AutoShardedBot', action='store_true')
     parser.add_argument('--no-git', help='do not create a .gitignore file', action='store_true', dest='no_git')
 
-def add_newcog_args(subparser):
+
+def add_newcog_args(subparser: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparser.add_parser('newcog', help='creates a new cog template quickly')
     parser.set_defaults(func=newcog)
 
@@ -282,7 +330,8 @@ def add_newcog_args(subparser):
     parser.add_argument('--hide-commands', help='whether to hide all commands in the cog', action='store_true')
     parser.add_argument('--full', help='add all special methods as well', action='store_true')
 
-def parse_args():
+
+def parse_args() -> Tuple[argparse.ArgumentParser, argparse.Namespace]:
     parser = argparse.ArgumentParser(prog='discord', description='Tools for helping with discord.py')
     parser.add_argument('-v', '--version', action='store_true', help='shows the library version')
     parser.set_defaults(func=core)
@@ -292,9 +341,11 @@ def parse_args():
     add_newcog_args(subparser)
     return parser, parser.parse_args()
 
-def main():
+
+def main() -> None:
     parser, args = parse_args()
     args.func(parser, args)
+
 
 if __name__ == '__main__':
     main()

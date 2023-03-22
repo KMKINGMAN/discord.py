@@ -23,14 +23,26 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import os
 import io
 
+from .utils import MISSING
+
+# fmt: off
 __all__ = (
     'File',
 )
+# fmt: on
+
+
+def _strip_spoiler(filename: str) -> Tuple[str, bool]:
+    stripped = filename
+    while stripped.startswith('SPOILER_'):
+        stripped = stripped[8:]  # len('SPOILER_')
+    spoiler = stripped != filename
+    return stripped, spoiler
 
 
 class File:
@@ -56,32 +68,29 @@ class File:
 
             To pass binary data, consider usage of ``io.BytesIO``.
 
-    filename: Optional[:class:`str`]
-        The filename to display when uploading to Discord.
-        If this is not given then it defaults to ``fp.name`` or if ``fp`` is
-        a string then the ``filename`` will default to the string given.
     spoiler: :class:`bool`
-        Whether the attachment is a spoiler.
+        Whether the attachment is a spoiler. If left unspecified, the :attr:`~File.filename` is used
+        to determine if the file is a spoiler.
+    description: Optional[:class:`str`]
+        The file description to display, currently only supported for images.
+
+        .. versionadded:: 2.0
     """
 
-    __slots__ = ('fp', 'filename', 'spoiler', '_original_pos', '_owner', '_closer')
-
-    if TYPE_CHECKING:
-        fp: io.BufferedIOBase
-        filename: Optional[str]
-        spoiler: bool
+    __slots__ = ('fp', '_filename', 'spoiler', 'description', '_original_pos', '_owner', '_closer')
 
     def __init__(
         self,
-        fp: Union[str, bytes, os.PathLike, io.BufferedIOBase],
+        fp: Union[str, bytes, os.PathLike[Any], io.BufferedIOBase],
         filename: Optional[str] = None,
         *,
-        spoiler: bool = False,
+        spoiler: bool = MISSING,
+        description: Optional[str] = None,
     ):
         if isinstance(fp, io.IOBase):
             if not (fp.seekable() and fp.readable()):
                 raise ValueError(f'File buffer {fp!r} must be seekable and readable')
-            self.fp = fp
+            self.fp: io.BufferedIOBase = fp
             self._original_pos = fp.tell()
             self._owner = False
         else:
@@ -98,16 +107,28 @@ class File:
 
         if filename is None:
             if isinstance(fp, str):
-                _, self.filename = os.path.split(fp)
+                _, filename = os.path.split(fp)
             else:
-                self.filename = getattr(fp, 'name', None)
-        else:
-            self.filename = filename
+                filename = getattr(fp, 'name', 'untitled')
 
-        if spoiler and self.filename is not None and not self.filename.startswith('SPOILER_'):
-            self.filename = 'SPOILER_' + self.filename
+        self._filename, filename_spoiler = _strip_spoiler(filename)
+        if spoiler is MISSING:
+            spoiler = filename_spoiler
 
-        self.spoiler = spoiler or (self.filename is not None and self.filename.startswith('SPOILER_'))
+        self.spoiler: bool = spoiler
+        self.description: Optional[str] = description
+
+    @property
+    def filename(self) -> str:
+        """:class:`str`: The filename to display when uploading to Discord.
+        If this is not given then it defaults to ``fp.name`` or if ``fp`` is
+        a string then the ``filename`` will default to the string given.
+        """
+        return 'SPOILER_' + self._filename if self.spoiler else self._filename
+
+    @filename.setter
+    def filename(self, value: str) -> None:
+        self._filename, self.spoiler = _strip_spoiler(value)
 
     def reset(self, *, seek: Union[int, bool] = True) -> None:
         # The `seek` parameter is needed because
@@ -125,3 +146,14 @@ class File:
         self.fp.close = self._closer
         if self._owner:
             self._closer()
+
+    def to_dict(self, index: int) -> Dict[str, Any]:
+        payload = {
+            'id': index,
+            'filename': self.filename,
+        }
+
+        if self.description is not None:
+            payload['description'] = self.description
+
+        return payload

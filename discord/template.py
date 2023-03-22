@@ -24,14 +24,15 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import Any, Optional, TYPE_CHECKING
-from .utils import parse_time, _get_as_snowflake, _bytes_to_base64_data, MISSING
-from .enums import VoiceRegion
+from typing import Any, Optional, TYPE_CHECKING, List
+from .utils import parse_time, _bytes_to_base64_data, MISSING
 from .guild import Guild
 
+# fmt: off
 __all__ = (
     'Template',
 )
+# fmt: on
 
 if TYPE_CHECKING:
     import datetime
@@ -48,7 +49,7 @@ class _FriendlyHttpAttributeErrorHelper:
 
 
 class _PartialTemplateState:
-    def __init__(self, *, state):
+    def __init__(self, *, state) -> None:
         self.__state = state
         self.http = _FriendlyHttpAttributeErrorHelper()
 
@@ -68,19 +69,19 @@ class _PartialTemplateState:
     def member_cache_flags(self):
         return self.__state.member_cache_flags
 
-    def store_emoji(self, guild, packet):
+    def store_emoji(self, guild, packet) -> None:
         return None
 
-    def _get_voice_client(self, id):
+    def _get_voice_client(self, id) -> None:
         return None
 
-    def _get_message(self, id):
+    def _get_message(self, id) -> None:
         return None
 
     def _get_guild(self, id):
         return self.__state._get_guild(id)
 
-    async def query_members(self, **kwargs: Any):
+    async def query_members(self, **kwargs: Any) -> List[Any]:
         return []
 
     def __getattr__(self, attr):
@@ -110,7 +111,7 @@ class Template:
         An aware datetime in UTC representing when the template was last updated.
         This is referred to as "last synced" in the official Discord client.
     source_guild: :class:`Guild`
-        The source guild.
+        The guild snapshot that represents the data that this template currently holds.
     is_dirty: Optional[:class:`bool`]
         Whether the template has unsynced changes.
 
@@ -166,20 +167,24 @@ class Template:
             f' creator={self.creator!r} source_guild={self.source_guild!r} is_dirty={self.is_dirty}>'
         )
 
-    async def create_guild(self, name: str, region: Optional[VoiceRegion] = None, icon: Any = None) -> Guild:
+    async def create_guild(self, name: str, icon: bytes = MISSING) -> Guild:
         """|coro|
 
         Creates a :class:`.Guild` using the template.
 
         Bot accounts in more than 10 guilds are not allowed to create guilds.
 
+        .. versionchanged:: 2.0
+            The ``region`` parameter has been removed.
+
+        .. versionchanged:: 2.0
+            This function will now raise :exc:`ValueError` instead of
+            ``InvalidArgument``.
+
         Parameters
         ----------
         name: :class:`str`
             The name of the guild.
-        region: :class:`.VoiceRegion`
-            The region for the voice communication server.
-            Defaults to :attr:`.VoiceRegion.us_west`.
         icon: :class:`bytes`
             The :term:`py:bytes-like object` representing the icon. See :meth:`.ClientUser.edit`
             for more details on what is expected.
@@ -188,7 +193,7 @@ class Template:
         ------
         HTTPException
             Guild creation failed.
-        InvalidArgument
+        ValueError
             Invalid icon image format given. Must be PNG or JPG.
 
         Returns
@@ -197,13 +202,11 @@ class Template:
             The guild created. This is not the same guild that is
             added to cache.
         """
-        if icon is not None:
-            icon = _bytes_to_base64_data(icon)
+        base64_icon = None
+        if icon is not MISSING:
+            base64_icon = _bytes_to_base64_data(icon)
 
-        region = region or VoiceRegion.us_west
-        region_value = region.value
-
-        data = await self._state.http.create_from_template(self.code, name, region_value, icon)
+        data = await self._state.http.create_from_template(self.code, name, base64_icon)
         return Guild(data=data, state=self._state)
 
     async def sync(self) -> Template:
@@ -211,8 +214,7 @@ class Template:
 
         Sync the template to the guild's current state.
 
-        You must have the :attr:`~Permissions.manage_guild` permission in the
-        source guild to do this.
+        You must have :attr:`~Permissions.manage_guild` in the source guild to do this.
 
         .. versionadded:: 1.7
 
@@ -247,8 +249,7 @@ class Template:
 
         Edit the template metadata.
 
-        You must have the :attr:`~Permissions.manage_guild` permission in the
-        source guild to do this.
+        You must have :attr:`~Permissions.manage_guild` in the source guild to do this.
 
         .. versionadded:: 1.7
 
@@ -291,8 +292,7 @@ class Template:
 
         Delete the template.
 
-        You must have the :attr:`~Permissions.manage_guild` permission in the
-        source guild to do this.
+        You must have :attr:`~Permissions.manage_guild` in the source guild to do this.
 
         .. versionadded:: 1.7
 
@@ -310,7 +310,7 @@ class Template:
     @property
     def url(self) -> str:
         """:class:`str`: The template url.
-        
+
         .. versionadded:: 2.0
         """
         return f'https://discord.new/{self.code}'

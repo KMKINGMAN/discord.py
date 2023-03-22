@@ -28,7 +28,7 @@ import unicodedata
 
 from .mixins import Hashable
 from .asset import Asset, AssetMixin
-from .utils import cached_slot_property, find, snowflake_time, get, MISSING
+from .utils import cached_slot_property, find, snowflake_time, get, MISSING, _get_as_snowflake
 from .errors import InvalidData
 from .enums import StickerType, StickerFormatType, try_enum
 
@@ -52,7 +52,6 @@ if TYPE_CHECKING:
         StandardSticker as StandardStickerPayload,
         GuildSticker as GuildStickerPayload,
         ListPremiumStickerPacks as ListPremiumStickerPacksPayload,
-        EditGuildSticker,
     )
 
 
@@ -87,9 +86,9 @@ class StickerPack(Hashable):
         The stickers of this sticker pack.
     sku_id: :class:`int`
         The SKU ID of the sticker pack.
-    cover_sticker_id: :class:`int`
+    cover_sticker_id: Optional[:class:`int`]
          The ID of the sticker used for the cover of the sticker pack.
-    cover_sticker: :class:`StandardSticker`
+    cover_sticker: Optional[:class:`StandardSticker`]
         The sticker used for the cover of the sticker pack.
     """
 
@@ -115,15 +114,15 @@ class StickerPack(Hashable):
         self.stickers: List[StandardSticker] = [StandardSticker(state=self._state, data=sticker) for sticker in stickers]
         self.name: str = data['name']
         self.sku_id: int = int(data['sku_id'])
-        self.cover_sticker_id: int = int(data['cover_sticker_id'])
-        self.cover_sticker: StandardSticker = get(self.stickers, id=self.cover_sticker_id) # type: ignore
+        self.cover_sticker_id: Optional[int] = _get_as_snowflake(data, 'cover_sticker_id')
+        self.cover_sticker: Optional[StandardSticker] = get(self.stickers, id=self.cover_sticker_id)
         self.description: str = data['description']
-        self._banner: int = int(data['banner_asset_id'])
+        self._banner: Optional[int] = _get_as_snowflake(data, 'banner_asset_id')
 
     @property
-    def banner(self) -> Asset:
+    def banner(self) -> Optional[Asset]:
         """:class:`Asset`: The banner asset of the sticker pack."""
-        return Asset._from_sticker_banner(self._state, self._banner)
+        return self._banner and Asset._from_sticker_banner(self._state, self._banner)  # type: ignore
 
     def __repr__(self) -> str:
         return f'<StickerPack id={self.id} name={self.name!r} description={self.description!r}>'
@@ -199,7 +198,7 @@ class StickerItem(_StickerTag):
 
     __slots__ = ('_state', 'name', 'id', 'format', 'url')
 
-    def __init__(self, *, state: ConnectionState, data: StickerItemPayload):
+    def __init__(self, *, state: ConnectionState, data: StickerItemPayload) -> None:
         self._state: ConnectionState = state
         self.name: str = data['name']
         self.id: int = int(data['id'])
@@ -228,7 +227,7 @@ class StickerItem(_StickerTag):
             The retrieved sticker.
         """
         data: StickerPayload = await self._state.http.get_sticker(self.id)
-        cls, _ = _sticker_factory(data['type'])  # type: ignore
+        cls, _ = _sticker_factory(data['type'])
         return cls(state=self._state, data=data)
 
 
@@ -406,7 +405,7 @@ class GuildSticker(Sticker):
         The ID of the guild that this sticker is from.
     user: Optional[:class:`User`]
         The user that created this sticker. This can only be retrieved using :meth:`Guild.fetch_sticker` and
-        having the :attr:`~Permissions.manage_emojis_and_stickers` permission.
+        having :attr:`~Permissions.manage_emojis_and_stickers`.
     emoji: :class:`str`
         The name of a unicode emoji that represents this sticker.
     """
@@ -469,7 +468,7 @@ class GuildSticker(Sticker):
         :class:`GuildSticker`
             The newly modified sticker.
         """
-        payload: EditGuildSticker = {}
+        payload = {}
 
         if name is not MISSING:
             payload['name'] = name
@@ -495,8 +494,7 @@ class GuildSticker(Sticker):
 
         Deletes the custom :class:`Sticker` from the guild.
 
-        You must have :attr:`~Permissions.manage_emojis_and_stickers` permission to
-        do this.
+        You must have :attr:`~Permissions.manage_emojis_and_stickers` to do this.
 
         Parameters
         -----------

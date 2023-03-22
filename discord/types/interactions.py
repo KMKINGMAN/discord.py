@@ -24,195 +24,211 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING, Dict, TypedDict, Union, List, Literal
-from .snowflake import Snowflake
-from .components import Component, ComponentType
-from .embed import Embed
-from .channel import ChannelType
+from typing import TYPE_CHECKING, Dict, List, Literal, TypedDict, Union
+from typing_extensions import NotRequired
+
+from .channel import ChannelTypeWithoutThread, ThreadMetadata
+from .threads import ThreadType
 from .member import Member
+from .message import Attachment
 from .role import Role
+from .snowflake import Snowflake
 from .user import User
 
 if TYPE_CHECKING:
-    from .message import AllowedMentions, Message
+    from .message import Message
 
 
-ApplicationCommandType = Literal[1, 2, 3]
-
-class _ApplicationCommandOptional(TypedDict, total=False):
-    options: List[ApplicationCommandOption]
-    type: ApplicationCommandType
+InteractionType = Literal[1, 2, 3, 4, 5]
 
 
-class ApplicationCommand(_ApplicationCommandOptional):
+class _BasePartialChannel(TypedDict):
     id: Snowflake
-    application_id: Snowflake
     name: str
-    description: str
+    permissions: str
 
 
-class _ApplicationCommandOptionOptional(TypedDict, total=False):
-    choices: List[ApplicationCommandOptionChoice]
-    options: List[ApplicationCommandOption]
+class PartialChannel(_BasePartialChannel):
+    type: ChannelTypeWithoutThread
 
 
-ApplicationCommandOptionType = Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+class PartialThread(_BasePartialChannel):
+    type: ThreadType
+    thread_metadata: ThreadMetadata
+    parent_id: Snowflake
 
 
-class ApplicationCommandOption(_ApplicationCommandOptionOptional):
-    type: ApplicationCommandOptionType
-    name: str
-    description: str
-    required: bool
+class ResolvedData(TypedDict, total=False):
+    users: Dict[str, User]
+    members: Dict[str, Member]
+    roles: Dict[str, Role]
+    channels: Dict[str, Union[PartialChannel, PartialThread]]
+    messages: Dict[str, Message]
+    attachments: Dict[str, Attachment]
 
 
-class ApplicationCommandOptionChoice(TypedDict):
-    name: str
-    value: Union[str, int]
-
-
-ApplicationCommandPermissionType = Literal[1, 2]
-
-
-class ApplicationCommandPermissions(TypedDict):
-    id: Snowflake
-    type: ApplicationCommandPermissionType
-    permission: bool
-
-
-class BaseGuildApplicationCommandPermissions(TypedDict):
-    permissions: List[ApplicationCommandPermissions]
-
-
-class PartialGuildApplicationCommandPermissions(BaseGuildApplicationCommandPermissions):
-    id: Snowflake
-
-
-class GuildApplicationCommandPermissions(PartialGuildApplicationCommandPermissions):
-    application_id: Snowflake
-    guild_id: Snowflake
-
-
-InteractionType = Literal[1, 2, 3]
-
-
-class _ApplicationCommandInteractionDataOption(TypedDict):
+class _BaseApplicationCommandInteractionDataOption(TypedDict):
     name: str
 
 
-class _ApplicationCommandInteractionDataOptionSubcommand(_ApplicationCommandInteractionDataOption):
+class _CommandGroupApplicationCommandInteractionDataOption(_BaseApplicationCommandInteractionDataOption):
     type: Literal[1, 2]
     options: List[ApplicationCommandInteractionDataOption]
 
 
-class _ApplicationCommandInteractionDataOptionString(_ApplicationCommandInteractionDataOption):
+class _BaseValueApplicationCommandInteractionDataOption(_BaseApplicationCommandInteractionDataOption, total=False):
+    focused: bool
+
+
+class _StringValueApplicationCommandInteractionDataOption(_BaseValueApplicationCommandInteractionDataOption):
     type: Literal[3]
     value: str
 
 
-class _ApplicationCommandInteractionDataOptionInteger(_ApplicationCommandInteractionDataOption):
+class _IntegerValueApplicationCommandInteractionDataOption(_BaseValueApplicationCommandInteractionDataOption):
     type: Literal[4]
     value: int
 
 
-class _ApplicationCommandInteractionDataOptionBoolean(_ApplicationCommandInteractionDataOption):
+class _BooleanValueApplicationCommandInteractionDataOption(_BaseValueApplicationCommandInteractionDataOption):
     type: Literal[5]
     value: bool
 
 
-class _ApplicationCommandInteractionDataOptionSnowflake(_ApplicationCommandInteractionDataOption):
-    type: Literal[6, 7, 8, 9]
+class _SnowflakeValueApplicationCommandInteractionDataOption(_BaseValueApplicationCommandInteractionDataOption):
+    type: Literal[6, 7, 8, 9, 11]
     value: Snowflake
 
 
-class _ApplicationCommandInteractionDataOptionNumber(_ApplicationCommandInteractionDataOption):
+class _NumberValueApplicationCommandInteractionDataOption(_BaseValueApplicationCommandInteractionDataOption):
     type: Literal[10]
     value: float
 
 
-ApplicationCommandInteractionDataOption = Union[
-    _ApplicationCommandInteractionDataOptionString,
-    _ApplicationCommandInteractionDataOptionInteger,
-    _ApplicationCommandInteractionDataOptionSubcommand,
-    _ApplicationCommandInteractionDataOptionBoolean,
-    _ApplicationCommandInteractionDataOptionSnowflake,
-    _ApplicationCommandInteractionDataOptionNumber,
+_ValueApplicationCommandInteractionDataOption = Union[
+    _StringValueApplicationCommandInteractionDataOption,
+    _IntegerValueApplicationCommandInteractionDataOption,
+    _BooleanValueApplicationCommandInteractionDataOption,
+    _SnowflakeValueApplicationCommandInteractionDataOption,
+    _NumberValueApplicationCommandInteractionDataOption,
 ]
 
 
-class ApplicationCommandResolvedPartialChannel(TypedDict):
+ApplicationCommandInteractionDataOption = Union[
+    _CommandGroupApplicationCommandInteractionDataOption,
+    _ValueApplicationCommandInteractionDataOption,
+]
+
+
+class _BaseApplicationCommandInteractionData(TypedDict):
     id: Snowflake
-    type: ChannelType
-    permissions: str
     name: str
+    resolved: NotRequired[ResolvedData]
+    guild_id: NotRequired[Snowflake]
 
 
-class ApplicationCommandInteractionDataResolved(TypedDict, total=False):
-    users: Dict[Snowflake, User]
-    members: Dict[Snowflake, Member]
-    roles: Dict[Snowflake, Role]
-    channels: Dict[Snowflake, ApplicationCommandResolvedPartialChannel]
-
-
-class _ApplicationCommandInteractionDataOptional(TypedDict, total=False):
+class ChatInputApplicationCommandInteractionData(_BaseApplicationCommandInteractionData, total=False):
+    type: Literal[1]
     options: List[ApplicationCommandInteractionDataOption]
-    resolved: ApplicationCommandInteractionDataResolved
+
+
+class _BaseNonChatInputApplicationCommandInteractionData(_BaseApplicationCommandInteractionData):
     target_id: Snowflake
-    type: ApplicationCommandType
 
 
-class ApplicationCommandInteractionData(_ApplicationCommandInteractionDataOptional):
-    id: Snowflake
-    name: str
+class UserApplicationCommandInteractionData(_BaseNonChatInputApplicationCommandInteractionData):
+    type: Literal[2]
 
 
-class _ComponentInteractionDataOptional(TypedDict, total=False):
-    values: List[str]
+class MessageApplicationCommandInteractionData(_BaseNonChatInputApplicationCommandInteractionData):
+    type: Literal[3]
 
 
-class ComponentInteractionData(_ComponentInteractionDataOptional):
+ApplicationCommandInteractionData = Union[
+    ChatInputApplicationCommandInteractionData,
+    UserApplicationCommandInteractionData,
+    MessageApplicationCommandInteractionData,
+]
+
+
+class _BaseMessageComponentInteractionData(TypedDict):
     custom_id: str
-    component_type: ComponentType
 
 
-InteractionData = Union[ApplicationCommandInteractionData, ComponentInteractionData]
+class ButtonMessageComponentInteractionData(_BaseMessageComponentInteractionData):
+    component_type: Literal[2]
 
 
-class _InteractionOptional(TypedDict, total=False):
-    data: InteractionData
-    guild_id: Snowflake
-    channel_id: Snowflake
-    member: Member
-    user: User
-    message: Message
+class SelectMessageComponentInteractionData(_BaseMessageComponentInteractionData):
+    component_type: Literal[3, 5, 6, 7, 8]
+    values: List[str]
+    resolved: NotRequired[ResolvedData]
 
 
-class Interaction(_InteractionOptional):
+MessageComponentInteractionData = Union[ButtonMessageComponentInteractionData, SelectMessageComponentInteractionData]
+
+
+class ModalSubmitTextInputInteractionData(TypedDict):
+    type: Literal[4]
+    custom_id: str
+    value: str
+
+
+ModalSubmitComponentItemInteractionData = ModalSubmitTextInputInteractionData
+
+
+class ModalSubmitActionRowInteractionData(TypedDict):
+    type: Literal[1]
+    components: List[ModalSubmitComponentItemInteractionData]
+
+
+ModalSubmitComponentInteractionData = Union[ModalSubmitActionRowInteractionData, ModalSubmitComponentItemInteractionData]
+
+
+class ModalSubmitInteractionData(TypedDict):
+    custom_id: str
+    components: List[ModalSubmitComponentInteractionData]
+
+
+InteractionData = Union[
+    ApplicationCommandInteractionData,
+    MessageComponentInteractionData,
+    ModalSubmitInteractionData,
+]
+
+
+class _BaseInteraction(TypedDict):
     id: Snowflake
     application_id: Snowflake
-    type: InteractionType
     token: str
-    version: int
+    version: Literal[1]
+    guild_id: NotRequired[Snowflake]
+    channel_id: NotRequired[Snowflake]
+    app_permissions: NotRequired[str]
+    locale: NotRequired[str]
+    guild_locale: NotRequired[str]
 
 
-class InteractionApplicationCommandCallbackData(TypedDict, total=False):
-    tts: bool
-    content: str
-    embeds: List[Embed]
-    allowed_mentions: AllowedMentions
-    flags: int
-    components: List[Component]
+class PingInteraction(_BaseInteraction):
+    type: Literal[1]
 
 
-InteractionResponseType = Literal[1, 4, 5, 6, 7]
+class ApplicationCommandInteraction(_BaseInteraction):
+    type: Literal[2, 4]
+    data: ApplicationCommandInteractionData
 
 
-class _InteractionResponseOptional(TypedDict, total=False):
-    data: InteractionApplicationCommandCallbackData
+class MessageComponentInteraction(_BaseInteraction):
+    type: Literal[3]
+    data: MessageComponentInteractionData
 
 
-class InteractionResponse(_InteractionResponseOptional):
-    type: InteractionResponseType
+class ModalSubmitInteraction(_BaseInteraction):
+    type: Literal[5]
+    data: ModalSubmitInteractionData
+
+
+Interaction = Union[PingInteraction, ApplicationCommandInteraction, MessageComponentInteraction, ModalSubmitInteraction]
 
 
 class MessageInteraction(TypedDict):
@@ -220,17 +236,4 @@ class MessageInteraction(TypedDict):
     type: InteractionType
     name: str
     user: User
-
-
-
-
-
-class _EditApplicationCommandOptional(TypedDict, total=False):
-    description: str
-    options: Optional[List[ApplicationCommandOption]]
-    type: ApplicationCommandType
-
-
-class EditApplicationCommand(_EditApplicationCommandOptional):
-    name: str
-    default_permission: bool
+    member: NotRequired[Member]

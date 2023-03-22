@@ -11,6 +11,7 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import logging
 import sys
 import os
 import re
@@ -41,6 +42,7 @@ extensions = [
     'attributetable',
     'resourcelinks',
     'nitpick_file_ignorer',
+    'colour_preview',
 ]
 
 autodoc_member_order = 'bysource'
@@ -50,13 +52,14 @@ autodoc_typehints = 'none'
 
 extlinks = {
     'issue': ('https://github.com/Rapptz/discord.py/issues/%s', 'GH-'),
+    'ddocs': ('https://discord.com/developers/docs/%s', None),
 }
 
 # Links used for cross-referencing stuff in other documentation
 intersphinx_mapping = {
   'py': ('https://docs.python.org/3', None),
   'aio': ('https://docs.aiohttp.org/en/stable/', None),
-  'req': ('https://docs.python-requests.org/en/latest/', None)
+  'req': ('https://requests.readthedocs.io/en/latest/', None)
 }
 
 rst_prolog = """
@@ -146,9 +149,25 @@ pygments_style = 'friendly'
 # Nitpicky mode options
 nitpick_ignore_files = [
   "migrating_to_async",
+  "migrating_to_v1",
   "migrating",
   "whats_new",
 ]
+
+
+# Ignore warnings about inconsistent order and/or count of references in translated messages.
+# This makes no sense, different languages can have different word order...
+def _i18n_warning_filter(record: logging.LogRecord) -> bool:
+  return not record.msg.startswith(
+    (
+      'inconsistent references in translated message',
+      'inconsistent term references in translated message',
+    )
+  )
+
+
+_i18n_logger = logging.getLogger('sphinx')
+_i18n_logger.addFilter(_i18n_warning_filter)
 
 # -- Options for HTML output ----------------------------------------------
 

@@ -13,11 +13,6 @@ discord.py - I hope you come back :(
 
 A modern, easy to use, feature-rich, and async ready API wrapper for Discord written in Python.
 
-The Future of discord.py
---------------------------
-
-Please read the `gist <https://gist.github.com/Rapptz/4a2f62751b9600a31a0d3c78100287f1>`_ for the future of this project. It's been a good one.
-
 Key Features
 -------------
 
@@ -65,10 +60,10 @@ Optional Packages
 
 * `PyNaCl <https://pypi.org/project/PyNaCl/>`__ (for voice support)
 
-Please note that on Linux installing voice you must install the following packages via your favourite package manager (e.g. ``apt``, ``dnf``, etc) before running the above commands:
+Please note that when installing voice support on Linux, you must install the following packages via your favourite package manager (e.g. ``apt``, ``dnf``, etc) before running the above commands:
 
 * libffi-dev (or ``libffi-devel`` on some systems)
-* python-dev (e.g. ``python3.6-dev`` for Python 3.6)
+* python-dev (e.g. ``python3.8-dev`` for Python 3.8)
 
 Quick Example
 --------------
@@ -89,7 +84,9 @@ Quick Example
             if message.content == 'ping':
                 await message.channel.send('pong')
 
-    client = MyClient()
+    intents = discord.Intents.default()
+    intents.message_content = True
+    client = MyClient(intents=intents)
     client.run('token')
 
 Bot Example
@@ -100,7 +97,9 @@ Bot Example
     import discord
     from discord.ext import commands
 
-    bot = commands.Bot(command_prefix='>')
+    intents = discord.Intents.default()
+    intents.message_content = True
+    bot = commands.Bot(command_prefix='>', intents=intents)
 
     @bot.command()
     async def ping(ctx):

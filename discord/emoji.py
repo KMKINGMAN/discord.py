@@ -23,16 +23,18 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from __future__ import annotations
-from typing import Any, Iterator, List, Optional, TYPE_CHECKING, Tuple
+from typing import Any, Collection, Iterator, List, Optional, TYPE_CHECKING, Tuple
 
 from .asset import Asset, AssetMixin
 from .utils import SnowflakeList, snowflake_time, MISSING
 from .partial_emoji import _EmojiTag, PartialEmoji
 from .user import User
 
+# fmt: off
 __all__ = (
     'Emoji',
 )
+# fmt: on
 
 if TYPE_CHECKING:
     from .types.emoji import Emoji as EmojiPayload
@@ -90,7 +92,7 @@ class Emoji(_EmojiTag, AssetMixin):
         Whether the emoji is available for use.
     user: Optional[:class:`User`]
         The user that created the emoji. This can only be retrieved using :meth:`Guild.fetch_emoji` and
-        having the :attr:`~Permissions.manage_emojis` permission.
+        having :attr:`~Permissions.manage_emojis`.
     """
 
     __slots__: Tuple[str, ...] = (
@@ -106,16 +108,16 @@ class Emoji(_EmojiTag, AssetMixin):
         'available',
     )
 
-    def __init__(self, *, guild: Guild, state: ConnectionState, data: EmojiPayload):
+    def __init__(self, *, guild: Guild, state: ConnectionState, data: EmojiPayload) -> None:
         self.guild_id: int = guild.id
         self._state: ConnectionState = state
         self._from_data(data)
 
-    def _from_data(self, emoji: EmojiPayload):
+    def _from_data(self, emoji: EmojiPayload) -> None:
         self.require_colons: bool = emoji.get('require_colons', False)
         self.managed: bool = emoji.get('managed', False)
-        self.id: int = int(emoji['id'])  # type: ignore
-        self.name: str = emoji['name']  # type: ignore
+        self.id: int = int(emoji['id'])  # type: ignore # This won't be None for full emoji objects.
+        self.name: str = emoji['name']  # type: ignore # This won't be None for full emoji objects.
         self.animated: bool = emoji.get('animated', False)
         self.available: bool = emoji.get('available', True)
         self._roles: SnowflakeList = SnowflakeList(map(int, emoji.get('roles', [])))
@@ -140,10 +142,10 @@ class Emoji(_EmojiTag, AssetMixin):
     def __repr__(self) -> str:
         return f'<Emoji id={self.id} name={self.name!r} animated={self.animated} managed={self.managed}>'
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, _EmojiTag) and self.id == other.id
 
-    def __ne__(self, other: Any) -> bool:
+    def __ne__(self, other: object) -> bool:
         return not self.__eq__(other)
 
     def __hash__(self) -> int:
@@ -173,7 +175,7 @@ class Emoji(_EmojiTag, AssetMixin):
         return [role for role in guild.roles if self._roles.has(role.id)]
 
     @property
-    def guild(self) -> Guild:
+    def guild(self) -> Optional[Guild]:
         """:class:`Guild`: The guild this emoji belongs to."""
         return self._state._get_guild(self.guild_id)
 
@@ -182,7 +184,7 @@ class Emoji(_EmojiTag, AssetMixin):
 
         .. versionadded:: 1.3
         """
-        if not self.available:
+        if not self.available or not self.guild or self.guild.unavailable:
             return False
         if not self._roles:
             return True
@@ -194,8 +196,7 @@ class Emoji(_EmojiTag, AssetMixin):
 
         Deletes the custom emoji.
 
-        You must have :attr:`~Permissions.manage_emojis` permission to
-        do this.
+        You must have :attr:`~Permissions.manage_emojis` to do this.
 
         Parameters
         -----------
@@ -210,15 +211,16 @@ class Emoji(_EmojiTag, AssetMixin):
             An error occurred deleting the emoji.
         """
 
-        await self._state.http.delete_custom_emoji(self.guild.id, self.id, reason=reason)
+        await self._state.http.delete_custom_emoji(self.guild_id, self.id, reason=reason)
 
-    async def edit(self, *, name: str = MISSING, roles: List[Snowflake] = MISSING, reason: Optional[str] = None) -> Emoji:
+    async def edit(
+        self, *, name: str = MISSING, roles: Collection[Snowflake] = MISSING, reason: Optional[str] = None
+    ) -> Emoji:
         r"""|coro|
 
         Edits the custom emoji.
 
-        You must have :attr:`~Permissions.manage_emojis` permission to
-        do this.
+        You must have :attr:`~Permissions.manage_emojis` to do this.
 
         .. versionchanged:: 2.0
             The newly updated emoji is returned.
@@ -227,7 +229,7 @@ class Emoji(_EmojiTag, AssetMixin):
         -----------
         name: :class:`str`
             The new emoji name.
-        roles: Optional[List[:class:`~discord.abc.Snowflake`]]
+        roles: List[:class:`~discord.abc.Snowflake`]
             A list of roles that can use this emoji. An empty list can be passed to make it available to everyone.
         reason: Optional[:class:`str`]
             The reason for editing this emoji. Shows up on the audit log.
@@ -251,5 +253,5 @@ class Emoji(_EmojiTag, AssetMixin):
         if roles is not MISSING:
             payload['roles'] = [role.id for role in roles]
 
-        data = await self._state.http.edit_custom_emoji(self.guild.id, self.id, payload=payload, reason=reason)
-        return Emoji(guild=self.guild, data=data, state=self._state)
+        data = await self._state.http.edit_custom_emoji(self.guild_id, self.id, payload=payload, reason=reason)
+        return Emoji(guild=self.guild, data=data, state=self._state)  # type: ignore # if guild is None, the http request would have failed
